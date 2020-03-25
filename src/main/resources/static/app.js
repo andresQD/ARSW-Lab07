@@ -7,7 +7,7 @@ var app = (function () {
             this.y = y;
         }
     }
-    
+
     var idDibujo;
 
     var stompClient = null;
@@ -20,6 +20,29 @@ var app = (function () {
         ctx.stroke();
     };
 
+    var addPolygonToCanvas = function (points) {
+        var canvas = document.getElementById("canvas");
+        var ctx = canvas.getContext("2d");
+        var cont = 1;
+        ctx.fillStyle = '#f00';
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        points.filter((point, index) => {
+            return index > 0;
+        }).map(function (point) {
+            if (cont === 4) {
+                cont = 0;
+                ctx.moveTo(point.x, point.y);
+            } else {
+                ctx.lineTo(point.x, point.y);
+            }
+            cont++;
+            ctx.stroke();
+        });
+        ctx.closePath();
+        ctx.fill();
+    };
+
 
     var getMousePosition = function (evt) {
         canvas = document.getElementById("canvas");
@@ -29,6 +52,7 @@ var app = (function () {
             y: evt.clientY - rect.top
         };
     };
+
 
 
     var connectAndSubscribe = function (callback) {
@@ -43,8 +67,15 @@ var app = (function () {
             stompClient.subscribe("/topic/newpoint." + idDibujo, function (eventbody) {
                 var theObject = JSON.parse(eventbody.body);
                 //callback(alert("New Point: " + theObject.x + " " + theObject.y));
-                callback(new Point(theObject.x, theObject.y));
+                addPointToCanvas(new Point(theObject.x, theObject.y));
             });
+
+            stompClient.subscribe("/topic/newpolygon." + idDibujo, function (eventbody) {
+                var theObject = JSON.parse(eventbody.body);
+                addPolygonToCanvas(theObject);
+            });
+
+
         });
 
     };
@@ -57,13 +88,16 @@ var app = (function () {
             app.disconnect();
             idDibujo = $("#dibujo").val();
             var can = document.getElementById("canvas");
+            var ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.beginPath();
             can.addEventListener("pointerdown", function (evt) {
                 var clickPosition = getMousePosition(evt);
                 app.publishPoint(clickPosition.x, clickPosition.y);
             });
 
             //websocket connection
-            connectAndSubscribe(addPointToCanvas);
+            connectAndSubscribe();
         },
 
         publishPoint: function (px, py) {
@@ -71,7 +105,7 @@ var app = (function () {
             console.info("publishing point at " + pt);
             //addPointToCanvas(pt);
             //publicar el evento
-            stompClient.send("/topic/newpoint." + idDibujo, {}, JSON.stringify(pt));
+            stompClient.send("/app/newpoint." + idDibujo, {}, JSON.stringify(pt));
         },
 
         disconnect: function () {
